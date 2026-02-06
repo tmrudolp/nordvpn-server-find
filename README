@@ -1,8 +1,8 @@
-# Notice
+NOTICE
 
 Forked from https://github.com/mrzool/nordvpn-server-find
 
-# Introduction
+INTRODUCTION
 
 Small script to find the fastest NordVPN servers, filtering by location and
 current capacity (i.e. server load).
@@ -13,7 +13,7 @@ quickly find out the fastest server to connect to.
 The script calls an undocumented NordVPN API endpoint for quick and reliable
 results.
 
-# Usage
+USAGE
 
 nordvpn-server-find -r|(-l LOCATION [-c CAPACITY=30] [-n LIMIT=20] [-q])
 
@@ -38,7 +38,7 @@ your location:
 If -q is given, manually set capacity and limit are ignored. If -r is given all
 other options are ignored.
 
-# Dependencies
+DEPENDENCIES
 
 - Bash 4
 - jq 1.5
