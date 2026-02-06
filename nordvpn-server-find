@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Script: nordvpn-server-find
 # Repository URL: https://github.com/mrzool/nordvpn-server-find
-# First release: December 2017
-# Last updated: April 2022
+# Updated for NordVPN API v1: February 2026
 # Author: Mattia Tezzele <info@mrzool.cc>
 
 # Dependencies check
@@ -22,7 +21,7 @@ OPTIND=1
 quiet=0
 location=false
 capacity=30 # Default capacity value is 30%
-limit=20    # Default limit value is 20
+limit=20 # Default limit value is 20
 
 iso_codes=(
   'ad' 'ae' 'af' 'ag' 'ai' 'al' 'am' 'ao' 'aq' 'ar' 'as' 'at' 'au' 'aw' 'ax'
@@ -63,11 +62,11 @@ while getopts ":l:c:n:rhq" opt; do
     echo
     echo "nordvpn-server-find -r|(-l LOCATION [-c CAPACITY=30] [-n LIMIT=20] [-q])"
     echo
-    echo "-r   $(tput smul)recommended$(tput rmul)   just output the recommended server for your location and exit, ignoring other options"
-    echo "-q   $(tput smul)quiet$(tput rmul)         just output the best result for the given location, ignoring the -n and the -c option"
-    echo "-l   $(tput smul)location$(tput rmul)      2-letter ISO 3166-1 country code (ex: us, uk, de)"
-    echo "-c   $(tput smul)capacity$(tput rmul)      current server load, integer between 1-100 (defaults to 30)"
-    echo "-n   $(tput smul)limit$(tput rmul)         limits number of results, integer between 1-100 (defaults to 20)"
+    echo "-r $(tput smul)recommended$(tput rmul) just output the recommended server for your location and exit, ignoring other options"
+    echo "-q $(tput smul)quiet$(tput rmul) just output the best result for the given location, ignoring the -n and the -c option"
+    echo "-l $(tput smul)location$(tput rmul) 2-letter ISO 3166-1 country code (ex: us, uk, de)"
+    echo "-c $(tput smul)capacity$(tput rmul) current server load, integer between 1-100 (defaults to 30)"
+    echo "-n $(tput smul)limit$(tput rmul) limits number of results, integer between 1-100 (defaults to 20)"
     echo
     exit 0
     ;;
@@ -76,7 +75,7 @@ while getopts ":l:c:n:rhq" opt; do
     limit=1
     ;;
   r)
-    rec_server=$(curl --silent "https://nordvpn.com/wp-admin/admin-ajax.php?action=servers_recommendations" | jq -r '.[0].hostname')
+    rec_server=$(curl --silent "https://api.nordvpn.com/v1/servers/recommendations?limit=1" | jq -r '.[0].hostname')
     echo "$rec_server"
     exit 0
     ;;
@@ -145,29 +144,30 @@ if [[ $quiet -ne 1 ]]; then
   fi
 fi
 
-servers=$(curl --silent https://nordvpn.com/api/server/stats)
+# Fetch servers from new API v1
+# The API returns an array of server objects with structure:
+# [{ "id": ..., "hostname": "us1234.nordvpn.com", "load": 25, "locations": [{"country": {"code": "US"}}], ... }]
+servers=$(curl --silent "https://api.nordvpn.com/v1/servers?limit=16000")
 
 # Declare and populate array
 declare -A results
 while IFS="=" read -r key value; do
   results[$key]="$value"
 done < <(jq --compact-output -r --arg location "$location" --arg capacity "$capacity" --arg limit "$limit" \
-  '[. |
-  to_entries[] |
-  {key: .key, value: .value.percent} |
-  select(.value <= ($capacity|tonumber)) |
-  select(.key|contains($location))] |
-  sort_by(.value) |
-  from_entries |
-  to_entries |
-  map("\(.key)=\(.value|tostring)") |
-  limit(($limit|tonumber);.[])' <<<"$servers")
+  '[.[] |
+  select(.status == "online") |
+  select(.locations[0].country.code | ascii_downcase == $location) |
+  select(.load <= ($capacity|tonumber)) |
+  {hostname: .hostname, load: .load}] |
+  sort_by(.load) |
+  limit(($limit|tonumber);.[]) |
+  "\(.hostname)=\(.load|tostring)"' <<<"$servers")
 
 # Print out results
 
 if [ ${#results[@]} -eq 0 ]; then
   if [[ $quiet -eq 1 ]]; then
-    exit -1
+    exit 1
   fi
   # Colored output only if writing to a terminal
   if [ -t 1 ]; then
